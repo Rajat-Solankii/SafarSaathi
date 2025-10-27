@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passenger - Track Your Bus</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        #map {
+            height: 500px;
+            border-radius: 10px;
+        }
+
+        .info-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-icon {
+            font-size: 2em;
+            margin-right: 15px;
+        }
+
+        .info-content {
+            flex: 1;
+        }
+
+        .info-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .eta-highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            #map {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>👤 Passenger Portal</h1>
+        <p>Track your bus in real-time</p>
+    </div>
+
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+
+        <div class="panel">
+            <h2>Select Your Route</h2>
+            
+            <div class="form-group">
+                <label for="routeSelect">Choose a bus route</label>
+                <select id="routeSelect">
+                    <option value="">Loading routes...</option>
+                </select>
+            </div>
+
+            <button class="btn" id="findBusBtn" onclick="findBus()">Find My Bus</button>
+        </div>
+
+        <div class="info-panel" id="infoPanel">
+            <div class="info-item eta-highlight">
+                <div class="info-icon">⏱️</div>
+                <div class="info-content">
+                    <div class="info-label">Estimated Time of Arrival</div>
+                    <div class="info-value" id="etaValue">Calculating...</div>
+                </div>
+            </div>
+
+            <div class="info-item">
+                <div class="info-icon">📍</div>
+                <div class="info-content">
+                    <div class="info-label">Your Nearest Stop</div>
+                    <div class="info-value" id="stopValue">Finding...</div>
+                </div>
+            </div>
+
+            <div class="info-item">
+                <div class="info-icon">🚌</div>
+                <div class="info-content">
+                    <div class="info-label">Bus Status</div>
+                    <div class="info-value" id="statusValue">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        let map;
+        let passengerMarker;
+        let busMarker;
+        let stopMarker;
+        let routeLine;
+        let trackingInterval;
+
+        // Custom icons
+        const busIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIyMCIgZmlsbD0iIzY2N2VlYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfmow8L3RleHQ+PC9zdmc+',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+
+        const passengerIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIyMCIgZmlsbD0iIzI4YTc0NSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfkaQ8L3RleHQ+PC9zdmc+',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+
+        const stopIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIyMCIgZmlsbD0iI2RjMzU0NSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfk408L3RleHQ+PC9zdmc+',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([28.4595, 77.0266], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // Load active routes
+        async function loadRoutes() {
+            try {
+                const response = await fetch('/api/active_routes');
+                const data = await response.json();
+                
+                const select = document.getElementById('routeSelect');
+                select.innerHTML = '';
+                
+                if (data.routes.length === 0) {
+                    select.innerHTML = '<option value="">No active buses at the moment</option>';
+                } else {
+                    select.innerHTML = '<option value="">Select a route...</option>';
+                    data.routes.forEach(route => {
+                        const option = document.createElement('option');
+                        option.value = route;
+                        option.textContent = route;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading routes:', error);
+            }
+        }
+
+        async function findBus() {
+            const routeName = document.getElementById('routeSelect').value;
+            
+            if (!routeName) {
+                alert('Please select a route');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            document.getElementById('findBusBtn').disabled = true;
+            document.getElementById('findBusBtn').textContent = 'Getting your location...';
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    await updateBusStatus(routeName, position.coords.latitude, position.coords.longitude);
+                    
+                    // Start tracking updates every 10 seconds
+                    if (trackingInterval) clearInterval(trackingInterval);
+                    trackingInterval = setInterval(() => {
+                        navigator.geolocation.getCurrentPosition(
+                            async (pos) => {
+                                await updateBusStatus(routeName, pos.coords.latitude, pos.coords.longitude);
+                            }
+                        );
+                    }, 10000);
+
+                    document.getElementById('findBusBtn').disabled = false;
+                    document.getElementById('findBusBtn').textContent = 'Refresh Location';
+                },
+                (error) => {
+                    alert('Unable to get your location. Please enable location services.');
+                    document.getElementById('findBusBtn').disabled = false;
+                    document.getElementById('findBusBtn').textContent = 'Find My Bus';
+                }
+            );
+        }
+
+        async function updateBusStatus(routeName, passengerLat, passengerLon) {
+            try {
+                const response = await fetch('/api/bus_status', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        route_name: routeName,
+                        lat: passengerLat,
+                        lon: passengerLon
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show info panel
+                    document.getElementById('infoPanel').style.display = 'block';
+
+                    // Update info
+                    document.getElementById('etaValue').textContent = `${data.eta_minutes} minutes`;
+                    document.getElementById('stopValue').textContent = data.nearest_stop.name;
+                    document.getElementById('statusValue').textContent = '🟢 Active & Approaching';
+
+                    // Clear existing markers
+                    if (passengerMarker) map.removeLayer(passengerMarker);
+                    if (busMarker) map.removeLayer(busMarker);
+                    if (stopMarker) map.removeLayer(stopMarker);
+                    if (routeLine) map.removeLayer(routeLine);
+
+                    // Add passenger marker
+                    passengerMarker = L.marker([passengerLat, passengerLon], {icon: passengerIcon})
+                        .addTo(map)
+                        .bindPopup('📍 Your Location');
+
+                    // Add bus marker
+                    busMarker = L.marker([data.bus_location.lat, data.bus_location.lon], {icon: busIcon})
+                        .addTo(map)
+                        .bindPopup('🚌 Bus Location');
+
+                    // Add nearest stop marker
+                    stopMarker = L.marker([data.nearest_stop.lat, data.nearest_stop.lon], {icon: stopIcon})
+                        .addTo(map)
+                        .bindPopup('🚏 Your Nearest Stop');
+
+                    // Draw route
+                    const routeCoords = data.route_stops.map(stop => [stop.lat, stop.lon]);
+                    routeLine = L.polyline(routeCoords, {
+                        color: '#667eea',
+                        weight: 4,
+                        opacity: 0.7
+                    }).addTo(map);
+
+                    // Fit map to show all markers
+                    const group = L.featureGroup([passengerMarker, busMarker, stopMarker, routeLine]);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error updating bus status:', error);
+                alert('Failed to get bus information');
+            }
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            initMap();
+            loadRoutes();
+            
+            // Refresh routes every 30 seconds
+            setInterval(loadRoutes, 30000);
+        };
+
+        // Cleanup on page unload
+        window.onbeforeunload = () => {
+            if (trackingInterval) clearInterval(trackingInterval);
+        };
+    </script>
+</body>
+</html>

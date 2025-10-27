@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Panel - Live Bus Tracking</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            gap: 25px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .autocomplete-container {
+            position: relative;
+        }
+
+        .autocomplete-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .autocomplete-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background: #f8f9fa;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .stops-list {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .stop-item {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .stop-item:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .stop-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .stop-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stop-name {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .btn-remove {
+            background: #dc3545;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .btn-remove:hover {
+            background: #c82333;
+            transform: scale(1.05);
+        }
+
+        #map {
+            height: calc(100vh - 180px);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-content {
+            text-align: center;
+        }
+
+        .status-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .status-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .status-detail {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #e0e0e0, transparent);
+            margin: 25px 0;
+        }
+
+        .route-info-box {
+            background: #e7f3ff;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .route-info-box strong {
+            color: #0066cc;
+        }
+
+        .route-info-box span {
+            color: #333;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            #map {
+                height: 500px;
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        .stops-list::-webkit-scrollbar,
+        .autocomplete-results::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .stops-list::-webkit-scrollbar-track,
+        .autocomplete-results::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .stops-list::-webkit-scrollbar-thumb,
+        .autocomplete-results::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Driver Control Panel</h1>
+            <p>Create routes, add stops one by one, and broadcast your location</p>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <!-- Route Management Panel -->
+                <div class="panel">
+                    <h2>📋 Route Management</h2>
+                    
+                    <div class="form-group">
+                        <label for="routeNameInput">Route Name</label>
+                        <input type="text" id="routeNameInput" placeholder="e.g., Route-101, Downtown Express">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="createNewRoute()">
+                        ➕ Create New Route
+                    </button>
+                </div>
+
+                <!-- Stop Management Panel -->
+                <div class="panel" id="stopPanel" style="display: none;">
+                    <h2>🚏 Add Stops</h2>
+                    
+                    <div class="route-info-box">
+                        <strong>Current Route:</strong>
+                        <span id="currentRouteDisplay"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="stopInput">Search Location</label>
+                        <div class="autocomplete-container">
+                            <input type="text" id="stopInput" placeholder="Type location name or address...">
+                            <div class="autocomplete-results" id="stopSuggestions"></div>
+                        </div>
+                    </div>
+
+                    <div class="stops-list" id="stopsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📍</div>
+                            <p>No stops added yet</p>
+                            <small>Search and add stops one by one</small>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-success" onclick="saveRoute()" style="margin-top: 15px;">
+                        💾 Save Route
+                    </button>
+                    <div id="routeStatus"></div>
+                </div>
+
+                <!-- Broadcasting Control Panel -->
+                <div class="status-card" id="broadcastPanel" style="display: none;">
+                    <div class="status-content">
+                        <div class="status-icon" id="statusIcon">⚪</div>
+                        <div class="status-text" id="statusText">Ready to Start</div>
+                        <div class="status-detail" id="statusDetail">Configure your bus ID and route below</div>
+                        
+                        <div class="form-group" style="text-align: left;">
+                            <label for="busIdInput">Bus ID / Driver Name</label>
+                            <input type="text" id="busIdInput" placeholder="e.g., Haryana Roadways, DL-1234">
+                        </div>
+
+                        <div class="stats-grid" id="statsGrid" style="display: none;">
+                            <div class="stat-item">
+                                <div class="stat-value" id="updateCount">0</div>
+                                <div class="stat-label">Location Updates</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="tripDuration">00:00</div>
+                                <div class="stat-label">Trip Duration</div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success" id="startBroadcastBtn" onclick="startBroadcasting()">
+                            🚀 Start Broadcasting
+                        </button>
+                        <button class="btn btn-danger" id="stopBroadcastBtn" onclick="stopBroadcasting()" style="display: none;">
+                            ⏹️ Stop Broadcasting
+                        </button>
+                        <div id="broadcastStatus"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Panel -->
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let stops = [];
+        let markers = [];
+        let routeLine;
+        let broadcastInterval;
+        let currentRouteName = null;
+        let routeSaved = false;  // Track if route is saved
+        let updateCount = 0;
+        let startTime;
+        let timerInterval;
+        let driverMarker;
+        let debounceTimer;
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([28.4595, 77.0266], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Get user's location
+            map.locate({setView: true, maxZoom: 14});
+            map.on('locationfound', onLocationFound);
+        }
+
+        function onLocationFound(e) {
+            if (!driverMarker) {
+                const icon = L.divIcon({
+                    className: 'driver-marker',
+                    html: '<div style="background: #28a745; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 3px solid white; box-shadow: 0 2px 15px rgba(0,0,0,0.4);">📍</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+                driverMarker = L.marker(e.latlng, { icon }).addTo(map);
+                driverMarker.bindPopup('<b>Your Current Location</b>').openPopup();
+            } else {
+                driverMarker.setLatLng(e.latlng);
+            }
+        }
+
+        // Autocomplete for stops using backend API
+        document.getElementById('stopInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            clearTimeout(debounceTimer);
+            
+            if (query.length < 3) {
+                document.getElementById('stopSuggestions').style.display = 'none';
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const container = document.getElementById('stopSuggestions');
+                    container.innerHTML = '<div class="autocomplete-item" style="color: #999;">🔍 Searching...</div>';
+                    container.style.display = 'block';
+
+                    const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch suggestions');
+                    }
+
+                    const data = await response.json();
+                    container.innerHTML = '';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'autocomplete-item';
+                            div.innerHTML = `📍 ${item.display_name}`;
+                            div.onclick = () => selectStop({
+                                display_name: item.display_name,
+                                lat: parseFloat(item.lat),
+                                lon: parseFloat(item.lon)
+                            });
+                            container.appendChild(div);
+                        });
+                        container.style.display = 'block';
+                    } else {
+                        container.innerHTML = '<div class="autocomplete-item" style="color: #999;">No results found</div>';
+                    }
+                } catch (error) {
+                    console.error('Autocomplete error:', error);
+                    const container = document.getElementById('stopSuggestions');
+                    container.innerHTML = '<div class="autocomplete-item" style="color: #dc3545;">❌ Error fetching suggestions. Check if backend is running.</div>';
+                }
+            }, 300);
+        });
+
+        function createNewRoute() {
+            const routeName = document.getElementById('routeNameInput').value.trim();
+            
+            if (!routeName) {
+                showNotification('⚠️ Please enter a route name', 'warning');
+                return;
+            }
+
+            currentRouteName = routeName;
+            stops = [];
+            
+            document.getElementById('currentRouteDisplay').textContent = routeName;
+            document.getElementById('stopPanel').style.display = 'block';
+            document.getElementById('broadcastPanel').style.display = 'block';
+            
+            updateStopsList();
+            updateMap();
+            
+            showNotification(`✅ Route "${routeName}" created. Add stops now!`, 'success');
+        }
+
+        function selectStop(location) {
+            stops.push({
+                name: location.display_name,
+                lat: location.lat,
+                lon: location.lon
+            });
+            
+            document.getElementById('stopInput').value = '';
+            document.getElementById('stopSuggestions').style.display = 'none';
+            
+            updateStopsList();
+            updateMap();
+            
+            showNotification(`✅ Stop ${stops.length} added!`, 'success');
+        }
+
+        function updateStopsList() {
+            const container = document.getElementById('stopsList');
+            container.innerHTML = '';
+            
+            if (stops.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📍</div>
+                        <p>No stops added yet</p>
+                        <small>Search and add stops one by one</small>
+                    </div>
+                `;
+                return;
+            }
+
+            stops.forEach((stop, index) => {
+                const div = document.createElement('div');
+                div.className = 'stop-item';
+                div.innerHTML = `
+                    <div class="stop-number">${index + 1}</div>
+                    <div class="stop-content">
+                        <div class="stop-name">${stop.name}</div>
+                    </div>
+                    <button class="btn-remove" onclick="removeStop(${index})">✕</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeStop(index) {
+            if (confirm(`Remove stop ${index + 1}?`)) {
+                stops.splice(index, 1);
+                updateStopsList();
+                updateMap();
+                showNotification('🗑️ Stop removed', 'info');
+            }
+        }
+
+        function updateMap() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            if (routeLine) map.removeLayer(routeLine);
+            
+            if (stops.length === 0) return;
+
+            stops.forEach((stop, index) => {
+                const icon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">${index + 1}</div>`,
+                    iconSize: [35, 35],
+                    iconAnchor: [17.5, 17.5]
+                });
+
+                const marker = L.marker([stop.lat, stop.lon], { icon }).addTo(map);
+                marker.bindPopup(`<b>Stop ${index + 1}</b><br>${stop.name}`);
+                markers.push(marker);
+            });
+            
+            if (stops.length > 1) {
+                const latlngs = stops.map(stop => [stop.lat, stop.lon]);
+                routeLine = L.polyline(latlngs, {
+                    color: '#667eea',
+                    weight: 5,
+                    opacity: 0.7,
+                    dashArray: '10, 10',
+                    lineJoin: 'round'
+                }).addTo(map);
+                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            } else if (stops.length === 1) {
+                map.setView([stops[0].lat, stops[0].lon], 14);
+            }
+        }
+
+        async function saveRoute() {
+            if (!currentRouteName) {
+                showNotification('⚠️ No route name specified', 'warning');
+                return;
+            }
+
+            if (stops.length < 2) {
+                showNotification('⚠️ Please add at least 2 stops', 'warning');
+                return;
+            }
+
+            // Format stops with coordinates (as backend expects)
+            const formattedStops = stops.map(stop => ({
+                name: stop.name,
+                lat: stop.lat,
+                lon: stop.lon
+            }));
+
+            // Show loading state
+            document.getElementById('routeStatus').innerHTML = `
+                <div style="background: #d1ecf1; color: #0c5460; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                    ⏳ Saving route...
+                </div>
+            `;
+
+            try {
+                // Backend expects route_name (with underscore) and stops with coordinates
+                const requestData = { 
+                    route_name: currentRouteName,  // Use snake_case as backend expects
+                    stops: formattedStops          // Include lat/lon for each stop
+                };
+                
+                console.log('Sending route data:', requestData);
+                
+                const response = await fetch('/api/create_route', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                // Get the raw response text first
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+                
+                // Try to parse as JSON
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('Parsed response data:', data);
+                } catch (e) {
+                    console.error('Failed to parse JSON:', e);
+                    throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+                }
+                
+                if (response.ok) {
+                    document.getElementById('routeStatus').innerHTML = `
+                        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                            ✅ Route saved successfully!
+                        </div>
+                    `;
+                    showNotification(`✅ Route "${currentRouteName}" saved with ${formattedStops.length} stops!`, 'success');
+                } else {
+                    throw new Error(data.error || data.message || 'Failed to save route');
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                document.getElementById('routeStatus').innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                        ❌ Error: ${error.message}
+                    </div>
+                `;
+                showNotification(`❌ Failed to save route: ${error.message}`, 'warning');
+            }
+        }
+
+        async function startBroadcasting() {
+            if (!navigator.geolocation) {
+                showNotification('❌ Geolocation is not supported', 'warning');
+                return;
+            }
+
+            const busId = document.getElementById('busIdInput').value.trim();
+
+            if (!currentRouteName || !busId) {
+                showNotification('⚠️ Please provide Bus ID and ensure route is created', 'warning');
+                return;
+            }
+
+            if (stops.length < 2) {
+                showNotification('⚠️ Please add at least 2 stops to the route', 'warning');
+                return;
+            }
+
+            // Validate that route has been saved
+            if (stops.length === 0) {
+                document.getElementById('broadcastStatus').innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                        ❌ Route not found. Please save the route first.
+                    </div>
+                `;
+                return;
+            }
+
+            document.getElementById('broadcastStatus').innerHTML = `
+                <div style="background: #d1ecf1; color: #0c5460; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                    ✅ Route loaded. Starting GPS tracking...
+                </div>
+            `;
+            
+            document.getElementById('startBroadcastBtn').style.display = 'none';
+            document.getElementById('stopBroadcastBtn').style.display = 'block';
+            document.getElementById('statusIcon').textContent = '🟢';
+            document.getElementById('statusText').textContent = 'Broadcasting Live';
+            document.getElementById('statusDetail').innerHTML = `
+                <span class="badge badge-success">● ACTIVE</span><br>
+                <small>Updating location every 5 seconds</small>
+            `;
+            document.getElementById('statsGrid').style.display = 'grid';
+            
+            updateCount = 0;
+            startTime = Date.now();
+            
+            broadcastInterval = setInterval(() => sendLocation(busId), 5000);
+            sendLocation(busId);
+            
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            showNotification('🚀 Broadcasting started!', 'success');
+        }
+
+        async function sendLocation(busId) {
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                
+                try {
+                    // Backend expects route_name, lat, lon
+                    await fetch('/api/update_location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            route_name: currentRouteName,  // Use snake_case
+                            lat: lat,
+                            lon: lon
+                        })
+                    });
+
+                    updateCount++;
+                    document.getElementById('updateCount').textContent = updateCount;
+                    
+                    const time = new Date().toLocaleTimeString();
+                    document.getElementById('broadcastStatus').innerHTML = `
+                        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                            🟢 Broadcasting Live | Last update: ${time}
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Location update error:', error);
+                }
+                
+                if (!driverMarker) {
+                    const icon = L.divIcon({
+                        className: 'driver-marker',
+                        html: '<div style="background: #28a745; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 3px solid white; box-shadow: 0 2px 15px rgba(0,0,0,0.4);">🚗</div>',
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
+                    });
+                    driverMarker = L.marker([lat, lon], { icon }).addTo(map);
+                    driverMarker.bindPopup('<b>Your Live Location</b>').openPopup();
+                } else {
+                    driverMarker.setLatLng([lat, lon]);
+                }
+                
+                // Check if reached destination
+                if (stops.length > 0) {
+                    const finalStop = stops[stops.length - 1];
+                    const distance = calculateDistance(lat, lon, finalStop.lat, finalStop.lon);
+                    
+                    if (distance < 0.05) { // Within 50 meters
+                        stopBroadcasting();
+                        showNotification('🎉 Trip completed! Final destination reached.', 'success');
+                    }
+                }
+            }, (error) => {
+                console.error('Geolocation error:', error);
+                document.getElementById('broadcastStatus').innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; font-weight: 600;">
+                        ❌ Please enable location access in your browser.
+                    </div>
+                `;
+            });
+        }
+
+        function stopBroadcasting() {
+            clearInterval(broadcastInterval);
+            clearInterval(timerInterval);
+            
+            document.getElementById('startBroadcastBtn').style.display = 'block';
+            document.getElementById('stopBroadcastBtn').style.display = 'none';
+            document.getElementById('statusIcon').textContent = '⚫';
+            document.getElementById('statusText').textContent = 'Broadcasting Stopped';
+            document.getElementById('statusDetail').innerHTML = `
+                <span class="badge badge-warning">● INACTIVE</span><br>
+                <small>Total updates sent: ${updateCount}</small>
+            `;
+            
+            showNotification('⏹️ Broadcasting stopped', 'info');
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('tripDuration').textContent = 
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#667eea'};
+                color: white;
+                padding: 15px 25px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        window.onload = () => {
+            initMap();
+        };
+
+        window.onbeforeunload = () => {
+            if (broadcastInterval) {
+                stopBroadcasting();
+            }
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-container')) {
+                document.getElementById('stopSuggestions').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

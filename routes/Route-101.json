@@ -1,0 +1,21 @@
+{
+  "route_name": "Route-101",
+  "stops": [
+    {
+      "name": "PHC, Chhuchakwas, Chuchakwas, Matenhail, Haryana, 124106, India",
+      "lat": 28.604639,
+      "lon": 76.51365
+    },
+    {
+      "name": "Matenhail, Matenhail, Haryana, 124106, India",
+      "lat": 28.5778891,
+      "lon": 76.4681053
+    },
+    {
+      "name": "Kosli, Haryana, India",
+      "lat": 28.3921086,
+      "lon": 76.45012155
+    }
+  ],
+  "created_at": "2025-10-25T11:58:25.514917"
+}
